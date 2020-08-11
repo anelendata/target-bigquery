@@ -62,7 +62,8 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
 
 
 def write_records(project_id, dataset_name, lines=None,
-                  stream=False, on_invalid_record="abort", partition_by=None):
+                  stream=False, on_invalid_record="abort", partition_by=None,
+                  numeric_type="NUMERIC"):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
@@ -109,13 +110,21 @@ def write_records(project_id, dataset_name, lines=None,
             state = None
 
         elif isinstance(message, singer.StateMessage):
-            logger.info("State: %s" % message.value)
             state = message.value
+            # State may contain sensitive info. Not logging in production
+            logger.debug("State: %s" % state)
+            currently_syncing = state.get("currently_syncing")
+            bookmarks = state.get("bookmarks")
+            if currently_syncing and bookmarks:
+                logger.info("State: currently_syncing %s - last_update: %s" %
+                            (currently_syncing,
+                             bookmarks.get(currently_syncing, dict()).get(
+                                 "last_update")))
 
         elif isinstance(message, singer.SchemaMessage):
             table_name = message.stream
             schemas[table_name] = message.schema
-            bq_schema = parse_schema(schemas[table_name])
+            bq_schema = parse_schema(schemas[table_name], numeric_type)
             bq_schemas[table_name] = bq_schema
 
             # My mom always said life was like a box of chocolates.
@@ -206,7 +215,8 @@ def main():
                           input_,
                           stream=config.get("stream", False),
                           on_invalid_record=on_invalid_record,
-                          partition_by=config.get("partition_by"))
+                          partition_by=config.get("partition_by"),
+                          numeric_type=config.get("numeric_type", "NUMERIC"))
 
     if state is not None:
         line = json.dumps(state)
