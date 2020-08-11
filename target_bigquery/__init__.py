@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 
-import argparse, datetime, io, json, logging, re, sys, time
-
-from jsonschema import validate
-from jsonschema.exceptions import ValidationError
+import argparse, datetime, io, logging, re, sys, time
+import simplejson as json
 
 import singer
 
@@ -15,74 +13,11 @@ from google.cloud.bigquery import Dataset, LoadJobConfig
 from google.cloud.exceptions import NotFound
 from google.api_core import exceptions
 
-from target_bigquery.schema import parse_schema
+from target_bigquery.schema import parse_schema, clean_and_validate
 
 logger = singer.get_logger()
 
 MAX_WARNING = 20
-
-# StitchData compatible timestamp meta data
-#  https://www.stitchdata.com/docs/data-structure/system-tables-and-columns
-BATCH_TIMESTAMP = "_sdc_batched_at"
-
-
-def clean_and_validate(message, schemas, invalids, on_invalid_record,
-                       json_dumps=False):
-    batch_tstamp = datetime.datetime.utcnow()
-    batch_tstamp = batch_tstamp.replace(
-        tzinfo=datetime.timezone.utc)
-
-    if message.stream not in schemas:
-        raise Exception(("A record for stream {} was encountered" +
-                         "before a corresponding schema").format(
-                             message.stream))
-
-    schema = schemas[message.stream]
-
-    try:
-        validate(message.record, schema)
-    except ValidationError as e:
-        cur_validation = False
-        error_message = str(e)
-
-        # A hacky attempt to ignore number-convertible strings...
-        instance = re.sub(r".*instance\[\'(.*)\'\].*", r"\1",
-                          error_message.split("\n")[5])
-        type_ = re.sub(r".*\{\'type\'\: \[\'.*\', \'(.*)\'\]\}.*",
-                       r"\1", error_message.split("\n")[3])
-        if type_ in ["integer", "number"]:
-            n = None
-            try:
-                n = float(message.record[instance])
-            except Exception:
-                # In case we want to persist the rows with partially
-                # invalid value
-                message.record[instance] = None
-                pass
-            if n is not None:
-                cur_validation = True
-        if cur_validation is False:
-            invalids = invalids + 1
-            if invalids < MAX_WARNING:
-                logger.warn(("Validation error in record %d [%s]" +
-                             " :: %s :: %s :: %s") %
-                            (count, instance, type_, str(message.record),
-                             str(e)))
-            elif invalids == MAX_WARNING:
-                logger.warn("Max validation warning reached.")
-
-            if on_invalid_record == "abort":
-                raise ValidationError("Validation required and failed.")
-
-    if BATCH_TIMESTAMP in schema["properties"].keys():
-        message.record[BATCH_TIMESTAMP] = batch_tstamp.isoformat()
-
-    record = message.record
-    if json_dumps:
-        record = bytes(json.dumps(record) + "\n", "UTF-8")
-
-    return record, invalids
-
 
 
 def get_or_create_dataset(client, project_id, dataset_name, location="US"):
@@ -245,7 +180,11 @@ def write_records(project_id, dataset_name, lines=None,
         load_job = client.load_table_from_file(
             table_files[table_name], table_id, job_config=load_config)
         logger.info("Batch loading job {}".format(load_job.job_id))
-        logger.info(load_job.result())
+        try:
+            logger.info(load_job.result())
+        except Exception as e:
+            logger.critical(load_job.errors)
+            raise
 
     return state
 

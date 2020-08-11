@@ -30,7 +30,8 @@ setup(
                       "google-api-python-client>=1.6.2",
                       "google-cloud>=0.34.0",
                       "google-cloud-bigquery>=1.9.0",
-                      "oauth2client"],
+                      "oauth2client",
+                      "simplejson==3.11.1"],
       entry_points="""
           [console_scripts]
           target_bigquery=target_bigquery:main
