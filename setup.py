@@ -8,7 +8,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="target_bigquery",
+    name="target-bigquery",
     version="0.1.0a0",
     description="Google BigQuery target of singer.io framework.",
     author="Daigo Tanaka, Anelen Co., LLC",
@@ -34,7 +34,7 @@ setup(
                       "simplejson==3.11.1"],
       entry_points="""
           [console_scripts]
-          target_bigquery=target_bigquery:main
+          target-bigquery=target_bigquery:main
       """,
     packages=["target_bigquery"],
     package_data = {

@@ -198,6 +198,15 @@ def write_records(project_id, dataset_name, lines=None,
     return state
 
 
+def _emit_state(state):
+    if state is None:
+        return
+    line = json.dumps(state)
+    logger.debug("Emitting state {}".format(line))
+    sys.stdout.write("{}\n".format(line))
+    sys.stdout.flush()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Config file', required=True)
@@ -218,12 +227,8 @@ def main():
                           partition_by=config.get("partition_by"),
                           numeric_type=config.get("numeric_type", "NUMERIC"))
 
-    if state is not None:
-        line = json.dumps(state)
-        logger.debug("Emitting state {}".format(line))
-        sys.stdout.write("{}\n".format(line))
-        sys.stdout.flush()
-
+    _emit_state(state)
+    logger.debug("Exiting normally")
 
 if __name__ == '__main__':
     main()
