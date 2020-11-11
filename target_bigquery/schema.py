@@ -45,7 +45,7 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
 
     if schema_type == "array":
         schema_type = property_.get("items").get("type")[1]
-        schema_mode = "ARRAY"
+        schema_mode = "REPEATED"
         if schema_type == "object":
             schema_type = "STRUCT"
             schema_fields = tuple(parse_schema(property_.get("items"),

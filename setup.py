@@ -30,6 +30,7 @@ setup(
                       "google-api-python-client>=1.6.2",
                       "google-cloud>=0.34.0",
                       "google-cloud-bigquery>=1.9.0",
+                      "grpcio==1.33.2",
                       "oauth2client",
                       "simplejson==3.11.1"],
       entry_points="""
