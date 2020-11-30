@@ -54,9 +54,12 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
             )
         try:
             table = client.create_table(table)
-        except exceptions.Conflict as e:
+        except exceptions.Conflict:
             logger.info("Failed to create table %s" % table_id)
-            raise e
+            raise
+        except exceptions.BadRequest:
+            logger.error("Error creating table with schema: %s" % schema)
+            raise
 
     return table
 
@@ -123,6 +126,11 @@ def write_records(project_id, dataset_name, lines=None,
 
         elif isinstance(message, singer.SchemaMessage):
             table_name = message.stream
+
+            if schemas.get(table_name):
+                # Redundant schema rows
+                continue
+
             schemas[table_name] = message.schema
             bq_schema = parse_schema(schemas[table_name], numeric_type)
             bq_schemas[table_name] = bq_schema
@@ -183,11 +191,18 @@ def write_records(project_id, dataset_name, lines=None,
         load_config.schema = bq_schema
         load_config.source_format = SourceFormat.NEWLINE_DELIMITED_JSON
 
-        logger.info("Batch loading {} to Bigquery.\n".format(table))
+        logger.info(f"Batch loading {table} to Bigquery")
         table_files[table_name].seek(0)
-        table_id = "%s.%s.%s" % (project_id, dataset_name, table_name)
-        load_job = client.load_table_from_file(
-            table_files[table_name], table_id, job_config=load_config)
+        table_id = f"{project_id}.{dataset_name}.{table_name}"
+        try:
+            load_job = client.load_table_from_file(
+                table_files[table_name], table_id, job_config=load_config)
+        except exceptions.BadRequest:
+            logger.error("Error loading records for table " + table_name)
+            logger.error(bq_schema)
+            table_files[table_name].seek(0)
+            logger.debug(table_files[table_name].read())
+            raise
         logger.info("Batch loading job {}".format(load_job.job_id))
         try:
             logger.info(load_job.result())
@@ -195,6 +210,7 @@ def write_records(project_id, dataset_name, lines=None,
             logger.critical(load_job.errors)
             raise
 
+    logger.info(f"Row counts: {row_count}")
     return state
 
 
