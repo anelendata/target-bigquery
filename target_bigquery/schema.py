@@ -8,20 +8,67 @@ import singer
 # StitchData compatible timestamp meta data
 #  https://www.stitchdata.com/docs/data-structure/system-tables-and-columns
 BATCH_TIMESTAMP = "_sdc_batched_at"
+JSONSCHEMA_TYPES = ["object", "array", "string", "integer", "number", "boolean"]
 
 logger = singer.get_logger()
 
 
-def _parse_property(key, property_, numeric_type="NUMERIC"):
-    schema_name = key
+def _get_schema_type_mode(property_, numeric_type):
+    type_ = property_.get("type")
 
-    schema_type = "STRING"
     schema_mode = "NULLABLE"
-    schema_description = None
-    schema_fields = tuple()
+    if isinstance(type_, list):
+        if type_[0] != "null":
+            schema_mode = "REQUIRED"
 
+        if len(type_) < 2 or type_[1] not in JSONSCHEMA_TYPES:
+            # Some major taps contain type first :(
+            jsonschema_type = type_[0]
+        else:
+            jsonschema_type = type_[1]
+    elif isinstance(type_, str):
+        jsonschema_type = type_
+    else:
+        raise Exception("type must be given as string or list")
+
+    jsonschema_type = jsonschema_type.lower()
+    if jsonschema_type not in JSONSCHEMA_TYPES:
+        raise Exception(f"{jsonschema_type} is not a valid jsonschema type")
+
+    # map jsonschema to BigQuery type
+    if jsonschema_type == "object":
+        schema_type = "RECORD"
+
+    if jsonschema_type == "array":
+        # Determined later by the item
+        schema_type = None
+        schema_mode = "REPEATED"
+
+    if jsonschema_type == "string":
+        schema_type = "STRING"
+        if "format" in property_:
+            if property_["format"] == "date-time":
+                schema_type = "TIMESTAMP"
+
+    if jsonschema_type == "integer":
+        schema_type = "INT64"
+
+    if jsonschema_type == "number":
+        schema_type = numeric_type
+
+    if jsonschema_type == "boolean":
+        schema_type = "BOOL"
+
+    return schema_type, schema_mode
+
+
+def _parse_property(key, property_, numeric_type="NUMERIC"):
     if numeric_type not in ["NUMERIC", "FLOAT64"]:
         raise ValueError("Unknown numeric type %s" % numeric_type)
+
+    schema_name = key
+    schema_description = None
+    schema_fields = tuple()
 
     if "type" not in property_ and "anyOf" in property_:
         for types in property_["anyOf"]:
@@ -30,40 +77,19 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
             else:
                 property_ = types
 
-    if isinstance(property_["type"], list):
-        if property_["type"][0] == "null":
-            schema_mode = "NULLABLE"
-        else:
-            schema_mode = "required"
-        schema_type = property_["type"][1]
-    else:
-        schema_type = property_["type"]
+    schema_type, schema_mode = _get_schema_type_mode(property_, numeric_type)
 
-    if schema_type == "object":
-        schema_type = "RECORD"
+    if schema_type == "RECORD":
         schema_fields = tuple(parse_schema(property_, numeric_type))
 
-    if schema_type == "array":
-        schema_type = property_.get("items").get("type")[1]
-        schema_mode = "REPEATED"
-        if schema_type == "object":
-            schema_type = "STRUCT"
+    if schema_mode == "REPEATED":
+        # get child type
+        schema_type, _ = _get_schema_type_mode(property_.get("items"),
+                                               numeric_type)
+
+        if schema_type == "RECORD":
             schema_fields = tuple(parse_schema(property_.get("items"),
                                                numeric_type))
-
-    if schema_type == "string":
-        if "format" in property_:
-            if property_["format"] == "date-time":
-                schema_type = "TIMESTAMP"
-
-    if schema_type == "integer":
-        schema_type = "INT64"
-
-    if schema_type == "number":
-        schema_type = numeric_type
-
-    if schema_type == "boolean":
-        schema_type = "BOOL"
 
     return (schema_name, schema_type, schema_mode, schema_description,
             schema_fields)
@@ -75,9 +101,16 @@ def parse_schema(schema, numeric_type="NUMERIC"):
         (schema_name, schema_type, schema_mode, schema_description,
          schema_fields) = _parse_property(key, schema["properties"][key],
                                           numeric_type)
+        schema_field = SchemaField(schema_name, schema_type, schema_mode,
+                                   schema_description, schema_fields)
+        bq_schema.append(schema_field)
 
-        bq_schema.append(SchemaField(schema_name, schema_type, schema_mode,
-                                     schema_description, schema_fields))
+    if not bq_schema:
+        logger.warn("RECORD type does not have properties." +
+                    " Inserting a dummy string object")
+        return parse_schema({"properties": {
+            "dummy": {"type": ["null", "string"]}}},
+            numeric_type)
 
     return bq_schema
 
@@ -101,7 +134,7 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
         cur_validation = False
         error_message = str(e)
 
-        # It's a big hacy and fragile here...
+        # It's a bit hacky and fragile here...
         instance = re.sub(r".*instance\[\'(.*)\'\].*", r"\1",
                           error_message.split("\n")[5])
         type_ = re.sub(r".*\{\'type\'\: \[\'.*\', \'(.*)\'\]\}.*",
