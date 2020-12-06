@@ -191,6 +191,9 @@ def write_records(project_id, dataset_name, lines=None,
         load_config.schema = bq_schema
         load_config.source_format = SourceFormat.NEWLINE_DELIMITED_JSON
 
+        if row_count[table_name] == 0:
+            logger.info(f"Zero records for {table}. Skip loading.")
+            continue
         logger.info(f"Batch loading {table} to Bigquery")
         table_files[table_name].seek(0)
         table_id = f"{project_id}.{dataset_name}.{table_name}"
@@ -205,12 +208,12 @@ def write_records(project_id, dataset_name, lines=None,
             raise
         logger.info("Batch loading job {}".format(load_job.job_id))
         try:
-            logger.info(load_job.result())
+            logger.debug(load_job.result())
         except Exception as e:
             logger.critical(load_job.errors)
             raise
 
-    logger.info(f"Row counts: {row_count}")
+    logger.info(f"{json.dumps(row_count)}")
     return state
 
 
