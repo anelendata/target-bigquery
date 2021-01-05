@@ -2,11 +2,6 @@
 
 ANELEN's implementation of target-bigquery.
 
-This is a "lab" stage project with limited documentatioin and support.
-For other open-source projects by Anelen, please see https://anelen.co/open-source.html
-
-## What it does
-
 Extract data from BigQuery tables.
 
 This is a [Singer](https://singer.io) tap that produces JSON-formatted data
@@ -53,15 +48,14 @@ For other authentication method, please see Authentication section.
 First, make sure Python 3 is installed on your system or follow these 
 installation instructions for Mac or Ubuntu.
 
-This program has not yet released via pypi. So do this to install the relatively stable version from GitHub:
+First, make sure Python 3 is installed on your system or follow these 
+installation instructions for Mac or Ubuntu.
 
 ```
-pip install --no-cache-dir https://github.com/anelendata/target-bigquery/archive/71b51aa8128d7b50a8155f6d9974308cd1d4c2d4.tar.gz#egg=target-bigquery
+pip install -U target-bigquery-partition
 ```
 
-Note: `71b51aa8128d7b50a8155f6d9974308cd1d4c2d4` in the URL is the commit hash.
-
-Or you can install the latest development version:
+Or you can install the lastest development version from GitHub:
 
 ```
 pip install --no-cache-dir https://github.com/anelendata/target-bigquery/archive/master.tar.gz#egg=target-bigquery

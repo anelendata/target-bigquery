@@ -9,7 +9,7 @@ You can contribute in many ways:
 
 ### Report Bugs
 
-Report bugs at https://github.com/anelendata/target_bigquery
+Report bugs at https://github.com/anelendata/target-bigquery
 
 If you are reporting a bug, please include:
 
@@ -34,7 +34,7 @@ in docstrings, or even on the web in blog posts,articles, and such.
 
 ### Submit Feedback
 
-The best way to send feedback is to file an issue at https://github.com/anelendata/target_bigquery/issues.
+The best way to send feedback is to file an issue at https://github.com/anelendata/target-bigquery/issues.
 
 If you are proposing a feature:
 
@@ -56,7 +56,7 @@ Before you submit a pull request, check that it meets these guidelines:
 
 TODO: Set up Travis:
 3. The pull request should work for Python 3.6, 3.7 and 3.8, and for PyPy. Check
-   https://travis-ci.org/anelendata/target_bigquery/pull_requests
+   https://travis-ci.org/anelendata/target-bigquery/pull_requests
    and make sure that the tests pass for all supported Python versions.
 
 ## Deploying

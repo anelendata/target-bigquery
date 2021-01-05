@@ -1,18 +1,20 @@
 #!/usr/bin/env python
-
 from setuptools import setup
 
-VERSION = "0.1.0a0"
+VERSION = "0.1.0"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
-    name="target-bigquery",
-    version="0.1.0a0",
+    name="target-bigquery-partition",
+    version=VERSION,
     description="Google BigQuery target of singer.io framework.",
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author="Daigo Tanaka, Anelen Co., LLC",
-    url="https://github.com/anelendata/target_bigquery",
+    url="https://github.com/anelendata/target-bigquery",
+
     classifiers=[
         "Development Status :: 4 - Beta",
         "License :: OSI Approved :: Apache Software License",
@@ -25,20 +27,19 @@ setup(
         "Programming Language :: Python :: 3.8",
     ],
 
-    install_requires=["jsonschema==2.6.0",  # singer-pythin requires exact
-                      "singer-python>=1.5.0",
+    install_requires=["singer-python>=5.2.0",
                       "google-api-python-client>=1.6.2",
-                      "google-cloud>=0.34.0",
-                      "google-cloud-bigquery>=1.9.0",
-                      "grpcio==1.33.2",
-                      "oauth2client",
-                      "simplejson==3.11.1"],
-      entry_points="""
-          [console_scripts]
-          target-bigquery=target_bigquery:main
-      """,
+                      "google-cloud-bigquery==1.16.0",
+                      "simplejson==3.11.1",
+                      "setuptools>=40.3.0"
+                      ],
+
+    entry_points="""
+    [console_scripts]
+    target-bigquery=target_bigquery:main
+    """,
     packages=["target_bigquery"],
-    package_data = {
+    package_data={
         # Use MANIFEST.ini
     },
     include_package_data=True
