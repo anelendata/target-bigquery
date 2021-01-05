@@ -48,9 +48,6 @@ For other authentication method, please see Authentication section.
 First, make sure Python 3 is installed on your system or follow these 
 installation instructions for Mac or Ubuntu.
 
-First, make sure Python 3 is installed on your system or follow these 
-installation instructions for Mac or Ubuntu.
-
 ```
 pip install -U target-bigquery-partition
 ```
