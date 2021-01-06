@@ -1,14 +1,18 @@
 import datetime
 import simplejson as json
+import re
+
 from google.cloud.bigquery import SchemaField
 from jsonschema import validate
 from jsonschema.exceptions import ValidationError
 import singer
 
+
 # StitchData compatible timestamp meta data
 #  https://www.stitchdata.com/docs/data-structure/system-tables-and-columns
 BATCH_TIMESTAMP = "_sdc_batched_at"
 JSONSCHEMA_TYPES = ["object", "array", "string", "integer", "number", "boolean"]
+MAX_WARNING = 20
 
 logger = singer.get_logger()
 
@@ -173,9 +177,9 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
         if cur_validation is False:
             invalids = invalids + 1
             if invalids < MAX_WARNING:
-                logger.warn(("Validation error in record %d [%s]" +
+                logger.warn(("Validation error in record [%s]" +
                              " :: %s :: %s :: %s") %
-                            (count, instance, type_, str(message.record),
+                            (instance, type_, str(message.record),
                              str(e)))
             elif invalids == MAX_WARNING:
                 logger.warn("Max validation warning reached.")

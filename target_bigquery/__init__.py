@@ -17,8 +17,6 @@ from target_bigquery.schema import parse_schema, clean_and_validate
 
 logger = singer.get_logger()
 
-MAX_WARNING = 20
-
 
 def get_or_create_dataset(client, project_id, dataset_name, location="US"):
     dataset_id = "%s.%s" % (project_id, dataset_name)
