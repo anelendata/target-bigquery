@@ -2,16 +2,9 @@
 
 ANELEN's implementation of target-bigquery.
 
-Extract data from BigQuery tables.
-
-This is a [Singer](https://singer.io) tap that produces JSON-formatted data
-following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md).
-
-This tap:
-
-- Pulls data from Google BigQuery tables/views with datetime field.
-- Infers the schema for each resource and produce catalog file.
-- Incrementally pulls data based on the input state.
+This is a [Singer](https://singer.io) target that loads JSON-formatted data
+following the [Singer spec](https://github.com/singer-io/getting-started/blob/master/SPEC.md)
+to Google BigQuery.
 
 ## Installation
 
@@ -23,7 +16,7 @@ this program.
 
 ### Step 1: Activate the Google BigQuery API
 
- (originally found in the [Google API docs](https://googlecloudplatform.github.io/google-cloud-python/latest/bigquery/usage.html))
+(originally found in the [Google API docs](https://googlecloudplatform.github.io/google-cloud-python/latest/bigquery/usage.html))
 
  1. Use [this wizard](https://console.developers.google.com/start/api?id=bigquery-json.googleapis.com) to create or select a project in the Google Developers Console and activate the BigQuery API. Click Continue, then Go to credentials.
  2. On the **Add credentials to your project** page, click the **Cancel** button.
