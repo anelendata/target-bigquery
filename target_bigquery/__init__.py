@@ -35,9 +35,31 @@ def get_or_create_dataset(client, project_id, dataset_name, location="US"):
     return dataset
 
 
-def get_or_create_table(client, project_id, dataset_name, table_name, schema,
-                        partition_by):
+def get_or_create_table(
+    client,
+    project_id,
+    dataset_name,
+    table_name,
+    schema,
+    partition_by,
+    partition_type="day",
+    partition_exp_ms=None,
+    ):
+
     table_id = f"{project_id}.{dataset_name}.{table_name}"
+    # https://googleapis.dev/python/bigquery/latest/generated/google.cloud.bigquery.table.TimePartitioningType.html#google-cloud-bigquery-table-timepartitioningtype
+    time_partition_types = {
+        "year": bigquery.TimePartitioningType.YEAR,
+        "month": bigquery.TimePartitioningType.MONTH,
+        "day": bigquery.TimePartitioningType.DAY,
+        "hour": bigquery.TimePartitioningType.HOUR,
+    }
+    time_partition_type = time_partition_types.get(partition_type)
+    if not time_partition_type:
+        raise ValueError(
+            f"{partition_type} is not a valid time parition type. " +
+            f"Supported time-parition types {time_partition_types}")
+
     try:
         table = client.get_table(table_id)
     except NotFound:
@@ -46,9 +68,9 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
         if partition_by:
             logger.info("Creating a partitioned table")
             table.time_partitioning = bigquery.TimePartitioning(
-                type_=bigquery.TimePartitioningType.DAY,
-                field=partition_by,  # name of column to use for partitioning
-                # expiration_ms=7776000000,  # 90 days
+                type_=time_partition_type,
+                field=partition_by,
+                expiration_ms=partition_exp_ms,
             )
         try:
             table = client.create_table(table)
@@ -62,11 +84,21 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
     return table
 
 
-def write_records(project_id, dataset_name, lines=None,
-                  stream=False, on_invalid_record="abort", partition_by=None,
-                  load_config_properties=None, numeric_type="NUMERIC",
-                  table_prefix="", table_ext="",
-                  max_warnings=20):
+def write_records(
+    project_id,
+    dataset_name,
+    lines=None,
+    stream=False,
+    on_invalid_record="abort",
+    partition_by=None,
+    partition_type="day",
+    partition_exp_ms=None,
+    table_prefix="",
+    table_ext="",
+    load_config_properties=None,
+    numeric_type="NUMERIC",
+    max_warnings=20,
+    ):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
@@ -159,16 +191,16 @@ def write_records(project_id, dataset_name, lines=None,
             bq_schema = parse_schema(schemas[table_name], numeric_type)
             bq_schemas[table_name] = bq_schema
 
-            # My mom always said life was like a box of chocolates.
-            # You never know what you're gonna get...or get streamed by a tap.
-            # So be lazy in initialization
             tables[table_name] = get_or_create_table(
-                client, project_id,
+                client,
+                project_id,
                 dataset_name,
                 f"{table_prefix}{table_name}{table_ext}",
                 bq_schema,
                 partition_by,
+                partition_type,
             )
+
             if stream:
                 # Ensure the table is created before streaming...
                 time.sleep(3)
@@ -291,10 +323,13 @@ def main():
                           stream=config.get("stream", False),
                           on_invalid_record=on_invalid_record,
                           partition_by=config.get("partition_by"),
+                          partition_type=config.get("partition_type", "day"),
+                          partition_exp_ms=config.get("partition_exp_ms", None),
                           table_prefix=config.get("table_prefix", ""),
                           table_ext=config.get("table_ext", ""),
                           load_config_properties=config.get("load_config"),
-                          numeric_type=config.get("numeric_type", "NUMERIC"))
+                          numeric_type=config.get("numeric_type", "NUMERIC"),
+                          )
 
     _emit_state(state)
     logger.debug("Exiting normally")
