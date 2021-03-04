@@ -64,7 +64,7 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
 
 def write_records(project_id, dataset_name, lines=None,
                   stream=False, on_invalid_record="abort", partition_by=None,
-                  numeric_type="NUMERIC"):
+                  load_config_properties=None, numeric_type="NUMERIC"):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
@@ -185,9 +185,13 @@ def write_records(project_id, dataset_name, lines=None,
         # We should already have get-or-created:
         table = tables[table_name]
 
-        load_config = LoadJobConfig()
-        load_config.schema = bq_schema
-        load_config.source_format = SourceFormat.NEWLINE_DELIMITED_JSON
+        load_config_props = {
+            "schema": bq_schema,
+            "source_format": SourceFormat.NEWLINE_DELIMITED_JSON
+        }
+        if load_config_properties:
+            load_config_props.update(load_config_properties)
+        load_config = LoadJobConfig(**load_config_props)
 
         if row_count[table_name] == 0:
             logger.info(f"Zero records for {table}. Skip loading.")
@@ -242,6 +246,7 @@ def main():
                           stream=config.get("stream", False),
                           on_invalid_record=on_invalid_record,
                           partition_by=config.get("partition_by"),
+                          load_config_properties=config.get("load_config"),
                           numeric_type=config.get("numeric_type", "NUMERIC"))
 
     _emit_state(state)
