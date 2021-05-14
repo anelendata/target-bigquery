@@ -212,7 +212,12 @@ def write_records(project_id, dataset_name, lines=None,
             logger.critical(load_job.errors)
             raise
 
-    logger.info(f"{json.dumps(row_count)}")
+    row_uploads = {
+        "type": "stats",
+        "metric": "row_uploads",
+        "value": row_count,
+    }
+    logger.info(f"{json.dumps(row_uploads)}")
     return state
 
 
