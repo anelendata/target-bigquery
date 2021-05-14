@@ -37,7 +37,7 @@ def get_or_create_dataset(client, project_id, dataset_name, location="US"):
 
 def get_or_create_table(client, project_id, dataset_name, table_name, schema,
                         partition_by):
-    table_id = "%s.%s.%s" % (project_id, dataset_name, table_name)
+    table_id = f"{project_id}.{dataset_name}.{table_name}"
     try:
         table = client.get_table(table_id)
     except NotFound:
@@ -55,8 +55,8 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
         except exceptions.Conflict:
             logger.info("Failed to create table %s" % table_id)
             raise
-        except exceptions.BadRequest:
-            logger.error("Error creating table with schema: %s" % schema)
+        except exceptions.BadRequest as e:
+            logger.error(f"Error creating table with schema:\n{schema}\n{str(e)}")
             raise
 
     return table
@@ -64,7 +64,7 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
 
 def write_records(project_id, dataset_name, lines=None,
                   stream=False, on_invalid_record="abort", partition_by=None,
-                  numeric_type="NUMERIC"):
+                  numeric_type="NUMERIC", table_prefix="", table_ext=""):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
@@ -117,10 +117,9 @@ def write_records(project_id, dataset_name, lines=None,
             currently_syncing = state.get("currently_syncing")
             bookmarks = state.get("bookmarks")
             if currently_syncing and bookmarks:
-                logger.info("State: currently_syncing %s - last_update: %s" %
-                            (currently_syncing,
-                             bookmarks.get(currently_syncing, dict()).get(
-                                 "last_update")))
+                logger.info(
+                    f"State: currently_syncing {currently_syncing} - bookmark: {bookmarks.get(currently_syncing)}"
+                )
 
         elif isinstance(message, singer.SchemaMessage):
             table_name = message.stream
@@ -136,11 +135,13 @@ def write_records(project_id, dataset_name, lines=None,
             # My mom always said life was like a box of chocolates.
             # You never know what you're gonna get...or get streamed by a tap.
             # So be lazy in initialization
-            tables[table_name] = get_or_create_table(client, project_id,
-                                                     dataset_name,
-                                                     table_name,
-                                                     bq_schema,
-                                                     partition_by)
+            tables[table_name] = get_or_create_table(
+                client, project_id,
+                dataset_name,
+                f"{table_prefix}{table_name}{table_ext}",
+                bq_schema,
+                partition_by,
+            )
             if stream:
                 # Ensure the table is created before streaming...
                 time.sleep(3)
@@ -169,7 +170,7 @@ def write_records(project_id, dataset_name, lines=None,
                     row_count[table_name], project_id,
                     dataset_name, table_name))
             else:
-                logger.warn("Errors:", errors[table], sep=" ")
+                logger.warn("Errors:", errors[table_name], sep=" ")
         return state
 
     # For batch job mode only
@@ -194,7 +195,7 @@ def write_records(project_id, dataset_name, lines=None,
             continue
         logger.info(f"Batch loading {table} to Bigquery")
         table_files[table_name].seek(0)
-        table_id = f"{project_id}.{dataset_name}.{table_name}"
+        table_id = f"{project_id}.{dataset_name}.{table_prefix}{table_name}{table_ext}"
         try:
             load_job = client.load_table_from_file(
                 table_files[table_name], table_id, job_config=load_config)
@@ -242,7 +243,9 @@ def main():
                           stream=config.get("stream", False),
                           on_invalid_record=on_invalid_record,
                           partition_by=config.get("partition_by"),
-                          numeric_type=config.get("numeric_type", "NUMERIC"))
+                          numeric_type=config.get("numeric_type", "NUMERIC"),
+                          table_prefix=config.get("table_prefix", ""),
+                          table_ext=config.get("table_ext", ""))
 
     _emit_state(state)
     logger.debug("Exiting normally")
