@@ -126,7 +126,7 @@ def write_records(project_id, dataset_name, lines=None,
                         "Validation required and failed. Aborting."
                     )
 
-            if new_invalids == 0 or on_invalid_record == "force":
+            if validation["is_valid"] or on_invalid_record == "force":
                 # https://cloud.google.com/bigquery/streaming-data-into-bigquery
                 if stream:
                     errors[message.stream] = client.insert_rows(
