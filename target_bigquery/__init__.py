@@ -106,7 +106,7 @@ def write_records(project_id, dataset_name, lines=None,
 
             if not validation["is_valid"]:
                 invalids = invalids + 1
-                instance = validastion["instance"]
+                instance = validation["instance"]
                 type_ = validation["type"]
                 invalid_record_str = json.dumps(validation["record"])
                 invalid_message = validation["message"]
