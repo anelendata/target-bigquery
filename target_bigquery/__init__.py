@@ -78,6 +78,7 @@ def write_records(project_id, dataset_name, lines=None,
     key_properties = {}
     table_files = {}
     row_count = {}
+    invalids = {}
     errors = {}
 
     client = bigquery.Client(project=project_id)
@@ -85,7 +86,6 @@ def write_records(project_id, dataset_name, lines=None,
     dataset = get_or_create_dataset(client, project_id, dataset_name)
 
     count = 0
-    invalids = 0
     for line in lines:
         try:
             message = singer.parse_message(line)
@@ -105,17 +105,17 @@ def write_records(project_id, dataset_name, lines=None,
             )
 
             if not validation["is_valid"]:
-                invalids = invalids + 1
+                invalids[message.stream] += 1
                 instance = validation["instance"]
                 type_ = validation["type"]
                 invalid_record_str = json.dumps(validation["record"])
                 invalid_message = validation["message"]
-                if invalids <= max_warnings:
+                if invalids[message.stream] <= max_warnings:
                     logger.warn(
                         f"Invalid record found and the process will {on_invalid_record}. "
                         f"[{instance}] :: {type_} :: {invalid_record_str} :: {message}"
                     )
-                if invalids == max_warnings:
+                if invalids[message.stream] == max_warnings:
                     logger.warn(
                         "Max validation warning reached. "
                         "Further validation warnings are suppressed."
@@ -133,8 +133,8 @@ def write_records(project_id, dataset_name, lines=None,
                         tables[message.stream], [record])
                 else:
                     table_files[message.stream].write(record)
+                row_count[message.stream] += 1
 
-            row_count[message.stream] += 1
             state = None
 
         elif isinstance(message, singer.StateMessage):
@@ -178,6 +178,7 @@ def write_records(project_id, dataset_name, lines=None,
 
             key_properties[table_name] = message.key_properties
             row_count[table_name] = 0
+            invalids[table_name] = 0
             errors[table_name] = None
 
         elif isinstance(message, singer.ActivateVersionMessage):
@@ -201,13 +202,13 @@ def write_records(project_id, dataset_name, lines=None,
         return state
 
     # For batch job mode only
-    if invalids > 0:
-        if on_invalid_record == "skip":
-            logger.warn("Persisting data set by skipping the invalid records.")
-        elif on_invalid_record == "force":
-            logger.warn("Persisting data by replacing invalids with null.")
-
     for table_name in table_files.keys():
+        if invalids[table_name] > 0:
+            if on_invalid_record == "skip":
+                logger.warn(f"Persisting {table_name} stream by skipping the invalid records.")
+            elif on_invalid_record == "force":
+                logger.warn(f"Persisting {table_name} stream by replacing invalids with null.")
+
         bq_schema = bq_schemas[table_name]
 
         # We should already have get-or-created:
@@ -251,6 +252,15 @@ def write_records(project_id, dataset_name, lines=None,
             "tags": {"endpoint": key},
         }
         logger.info(f"{json.dumps(row_uploads)}")
+    for key, value in invalids.items():
+        invalid_rows = {
+            "type": "counter",
+            "metric": "invalid_records",
+            "value": value,
+            "tags": {"endpoint": key},
+        }
+        logger.info(f"{json.dumps(invalid_rows)}")
+
     return state
 
 
