@@ -32,7 +32,7 @@ def _get_schema_type_mode(property_, numeric_type):
     elif isinstance(type_, str):
         jsonschema_type = type_
     else:
-        raise Exception("type must be given as string or list")
+        raise Exception(f"type must be given as string or list. Given {type(type_)}")
 
     jsonschema_type = jsonschema_type.lower()
     if jsonschema_type not in JSONSCHEMA_TYPES:
@@ -100,7 +100,7 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
 
 def parse_schema(schema, numeric_type="NUMERIC"):
     bq_schema = []
-    for key in schema["properties"].keys():
+    for key in schema.get("properties", {}).keys():
         (schema_name, schema_type, schema_mode, schema_description,
          schema_fields) = _parse_property(key, schema["properties"][key],
                                           numeric_type)
