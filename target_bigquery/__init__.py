@@ -64,7 +64,8 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
 
 def write_records(project_id, dataset_name, lines=None,
                   stream=False, on_invalid_record="abort", partition_by=None,
-                  load_config_properties=None, numeric_type="NUMERIC"):
+                  load_config_properties=None, numeric_type="NUMERIC",
+                  max_warnings=20):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
@@ -96,10 +97,35 @@ def write_records(project_id, dataset_name, lines=None,
                 json_dumps = False
             else:
                 json_dumps = True
-            record, invalids = clean_and_validate(message, schemas, invalids,
-                                                  on_invalid_record, json_dumps)
+            record, validation = clean_and_validate(
+                message,
+                schemas,
+                json_dumps,
+            )
 
-            if invalids == 0 or on_invalid_record == "force":
+            if not validation["is_valid"]:
+                invalids = invalids + 1
+                instance = validastion["instance"]
+                type_ = validation["type"]
+                invalid_record_str = json.dumps(validation["record"])
+                invalid_message = validation["message"]
+                if invalids <= max_warnings:
+                    logger.warn(
+                        f"Invalid record found and the process will {on_invalid_record}. "
+                        f"[{instance}] :: {type_} :: {invalid_record_str} :: {message}"
+                    )
+                if invalids == max_warnings:
+                    logger.warn(
+                        "Max validation warning reached. "
+                        "Further validation warnings are suppressed."
+                    )
+
+                if on_invalid_record == "abort":
+                    raise ValidationError(
+                        "Validation required and failed. Aborting."
+                    )
+
+            if new_invalids == 0 or on_invalid_record == "force":
                 # https://cloud.google.com/bigquery/streaming-data-into-bigquery
                 if stream:
                     errors[message.stream] = client.insert_rows(

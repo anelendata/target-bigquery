@@ -12,7 +12,6 @@ import singer
 #  https://www.stitchdata.com/docs/data-structure/system-tables-and-columns
 BATCH_TIMESTAMP = "_sdc_batched_at"
 JSONSCHEMA_TYPES = ["object", "array", "string", "integer", "number", "boolean"]
-MAX_WARNING = 20
 
 logger = singer.get_logger()
 
@@ -119,8 +118,7 @@ def parse_schema(schema, numeric_type="NUMERIC"):
     return bq_schema
 
 
-def clean_and_validate(message, schemas, invalids, on_invalid_record,
-                       json_dumps=False):
+def clean_and_validate(message, schemas, json_dumps=False):
     batch_tstamp = datetime.datetime.utcnow()
     batch_tstamp = batch_tstamp.replace(
         tzinfo=datetime.timezone.utc)
@@ -132,10 +130,13 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
 
     schema = schemas[message.stream]
 
+    validation = {
+        "is_valid": True
+    }
     try:
         validate(message.record, schema)
     except ValidationError as e:
-        cur_validation = False
+        validation["is_valid"] = False
         error_message = str(e)
 
         # It's a bit hacky and fragile here...
@@ -150,12 +151,12 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
             try:
                 n = float(message.record[instance])
             except Exception:
-                # In case we want to persist the rows with partially
-                # invalid value
+                # nullify in case we want to persist the rows with partially
+                # invalid value with "force" mode:
                 message.record[instance] = None
                 pass
             if n is not None:
-                cur_validation = True
+                validation["is_valid"] = True
 
         # TODO:
         # Convert to BigQuery timestamp type (iso 8601)
@@ -172,20 +173,13 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
         #         message.record[instance] = None
         #         pass
         #     if d is not None:
-        #         cur_validation = True
+        #         validation["is_valid"] = True
 
-        if cur_validation is False:
-            invalids = invalids + 1
-            if invalids < MAX_WARNING:
-                logger.warn(("Validation error in record [%s]" +
-                             " :: %s :: %s :: %s") %
-                            (instance, type_, str(message.record),
-                             str(e)))
-            elif invalids == MAX_WARNING:
-                logger.warn("Max validation warning reached.")
-
-            if on_invalid_record == "abort":
-                raise ValidationError("Validation required and failed.")
+        if validation["is_valid"] is False:
+            validation["type"] = type_
+            validation["instance"] = instance
+            validation["record"] = message.record
+            validation["message"] = str(e)
 
     if BATCH_TIMESTAMP in schema["properties"].keys():
         message.record[BATCH_TIMESTAMP] = batch_tstamp.isoformat()
@@ -198,4 +192,4 @@ def clean_and_validate(message, schemas, invalids, on_invalid_record,
             logger.warning(record)
             raise
 
-    return record, invalids
+    return record, validation
