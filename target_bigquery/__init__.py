@@ -122,7 +122,7 @@ def write_records(project_id, dataset_name, lines=None,
                     )
 
                 if on_invalid_record == "abort":
-                    raise ValidationError(
+                    raise Exception(
                         "Validation required and failed. Aborting."
                     )
 
