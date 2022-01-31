@@ -65,7 +65,7 @@ def get_or_create_table(client, project_id, dataset_name, table_name, schema,
 def write_records(project_id, dataset_name, lines=None,
                   stream=False, on_invalid_record="abort", partition_by=None,
                   load_config_properties=None, numeric_type="NUMERIC",
-                  numeric_type="NUMERIC", table_prefix="", table_ext=""):
+                  table_prefix="", table_ext=""):
     if on_invalid_record not in ("abort", "skip", "force"):
         raise ValueError("on_invalid_record must be one of" +
                          " (abort, skip, force)")
