@@ -62,13 +62,17 @@ config.sample.json:
 {
     "project_id": "your-gcp-project-id",
     "dataset_id": "your-bigquery-dataset",
-    "table_id": "your-table-name",
+    "table_prefix": "optional_table_prefix",
+    "table_ext": "optional_table_ext",
+    "partition_by": "optional_column_name",
+    "partition_type": "day",
     "stream": false,
 }
 ```
 Notes:
+- The table name is set as stream name from the tap. You can add prefix and ext to the name.
+- Optionally, you can set partition_by to create a partitioned table. Many production quailty taps implements a ingestion timestamp and it is recommended to use the column here to partition the table. It will increase the query performance and lower the BigQuery costs. partition_type can be hour, day, month, or year and the default is day.
 - `stream`: Make this true to run the streaming updates to BigQuery. Note that performance of batch update is better when keeping this option `false`.
-- Optionally, you can define `"partition_by": <some-timestamp-column-name>` to create a partitioned table. Many production quailty taps implements a ingestion timestamp and it is recommended to use the column here to partition the table. It will increase the query performance and lower the BigQuery costs.
 
 ### Step 2: Run
 
