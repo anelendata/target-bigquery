@@ -66,12 +66,13 @@ config.sample.json:
     "table_ext": "optional_table_ext",
     "partition_by": "optional_column_name",
     "partition_type": "day",
+    "partition_exp_ms": null,
     "stream": false,
 }
 ```
 Notes:
 - The table name is set as stream name from the tap. You can add prefix and ext to the name.
-- Optionally, you can set partition_by to create a partitioned table. Many production quailty taps implements a ingestion timestamp and it is recommended to use the column here to partition the table. It will increase the query performance and lower the BigQuery costs. partition_type can be hour, day, month, or year and the default is day.
+- Optionally, you can set partition_by to create a partitioned table. Many production quailty taps implements a ingestion timestamp and it is recommended to use the column here to partition the table. It will increase the query performance and lower the BigQuery costs. partition_type can be hour, day, month, or year and the default is day. partition_exp_ms sets the partition expiration in millisecond. Default is null (never expire).
 - `stream`: Make this true to run the streaming updates to BigQuery. Note that performance of batch update is better when keeping this option `false`.
 
 ### Step 2: Run
