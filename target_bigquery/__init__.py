@@ -199,6 +199,7 @@ def write_records(
                 bq_schema,
                 partition_by,
                 partition_type,
+                partition_exp_ms,
             )
 
             if stream:
