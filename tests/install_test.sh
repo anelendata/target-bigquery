@@ -15,6 +15,8 @@ fi
 
 $PYTHON -m venv install_test
 source install_test/bin/activate;
+pip install -U pip;
+pip install grpcio
 find $APP -name '__pycache__' | xargs rm -fr;
 python setup.py clean --all;
 rm -fr dist;
