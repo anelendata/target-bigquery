@@ -5,7 +5,7 @@ import simplejson as json
 
 import singer
 
-from tempfile import TemporaryFile
+from tempfile import NamedTemporaryFile
 
 from google.cloud import bigquery
 from google.cloud.bigquery.job import SourceFormat
@@ -207,7 +207,7 @@ def write_records(
                 time.sleep(3)
 
             if not stream:
-                table_files[table_name] = TemporaryFile(mode='w+b')
+                table_files[table_name] = NamedTemporaryFile(mode="w+b", suffix=".json", delete=True)
 
             key_properties[table_name] = message.key_properties
             row_count[table_name] = 0
@@ -270,7 +270,8 @@ def write_records(
             table_files[table_name].seek(0)
             logger.debug(table_files[table_name].read())
             raise
-        logger.info("Batch loading job {}".format(load_job.job_id))
+        logger.info(f"Batch loading job for {table_name}\n JOB ID: {load_job.job_id}")
+        logger.debug(f"    NamedTemporaryFile name: {table_files[table_name].name}")
         try:
             logger.debug(load_job.result())
         except Exception as e:
