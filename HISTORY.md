@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.1 (2023-10-20)
+
+- Support JSON type #11
+
 ### 0.2.0 (2022-03-11)
 
 - [Feature Request] Configurable time partitioning size enhancement #2
