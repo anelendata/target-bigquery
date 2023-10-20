@@ -119,10 +119,13 @@ def write_records(
 
     count = 0
     for line in lines:
+        if str(line).strip() == "":
+            logger.warning(f"Empty line detected at {count}")
+            continue
         try:
             message = singer.parse_message(line)
-        except json.decoder.JSONDecodeError:
-            logger.error("Unable to parse:\n{}".format(line))
+        except:
+            logger.error(f"Unable to parse at {count}:\n{line}")
             raise
 
         if isinstance(message, singer.RecordMessage):

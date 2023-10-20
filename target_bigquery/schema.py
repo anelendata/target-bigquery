@@ -52,6 +52,8 @@ def _get_schema_type_mode(property_, numeric_type):
         if "format" in property_:
             if property_["format"] == "date-time":
                 schema_type = "TIMESTAMP"
+            elif property_["format"] == "json":
+                schema_type = "JSON"
 
     if jsonschema_type == "integer":
         schema_type = "INT64"
