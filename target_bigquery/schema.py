@@ -2,8 +2,8 @@ import datetime
 import simplejson as json
 import re
 
-from google.cloud.bigquery import SchemaField
-from jsonschema import validate
+from google.cloud.bigquery import Client, SchemaField
+from jsonschema import validate, FormatChecker
 from jsonschema.exceptions import ValidationError
 import singer
 
@@ -103,9 +103,13 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
 def parse_schema(schema, numeric_type="NUMERIC"):
     bq_schema = []
     for key in schema.get("properties", {}).keys():
-        (schema_name, schema_type, schema_mode, schema_description,
-         schema_fields) = _parse_property(key, schema["properties"][key],
-                                          numeric_type)
+        try:
+            (schema_name, schema_type, schema_mode, schema_description,
+             schema_fields) = _parse_property(key, schema["properties"][key],
+                                              numeric_type)
+        except Exception as e:
+            logger.error(f"str(e) at {schema['properties'][key]}")
+            raise e
         schema_field = SchemaField(schema_name, schema_type, schema_mode,
                                    schema_description, schema_fields)
         bq_schema.append(schema_field)
@@ -118,6 +122,62 @@ def parse_schema(schema, numeric_type="NUMERIC"):
             numeric_type)
 
     return bq_schema
+
+
+def modify_schema(config, catalog_file, streams=None, numeric_type="NUMERIC", dryrun=False):
+    with open(catalog_file, "r") as f:
+        catalog = json.load(f)
+    if isinstance(streams, str):
+        streams = streams.split(",")
+    client = Client(project=config["project_id"])
+
+    for stream in catalog["streams"]:
+        if not streams or stream["stream"] in streams:
+            schema = stream["schema"]
+            bq_schema = parse_schema(schema)
+            table_path = config["project_id"] + "." + config["dataset_id"] + "." + stream["stream"]
+            table = None
+            try:
+                table = client.get_table(table_path)
+            except:
+                pass
+            if not table:
+                logger.error("Table does not exist: " + table_path)
+                continue
+            original_schema = table.schema
+            new_schema = original_schema[:]   # Make a copy
+            exist_cols = [sfield.name for sfield in original_schema]
+            new_cols = 0
+            for key in schema["properties"].keys():
+                if key in exist_cols:
+                    logger.warning(f"Column {key} exists in Table {table_path}")
+                    continue
+
+                logger.info(f"Adding Column {key} in Table {table_path}")
+                new_cols += 1
+                (schema_name, schema_type, schema_mode, schema_description,
+                 schema_fields) = _parse_property(key, schema["properties"][key],
+                                                  numeric_type)
+                schema_field = SchemaField(schema_name, schema_type, schema_mode,
+                                           schema_description, schema_fields)
+                new_schema.append(schema_field)
+
+            table.schema = new_schema
+            if new_cols > 0:
+                if not dryrun:
+                    table = client.update_table(table, ["schema"])  # Make an API request.
+                    if len(table.schema) == len(original_schema) + new_cols == len(new_schema):
+                        logger.info(f"A new column has been added for {table_path}.")
+                    else:
+                        logger.error(f"The column has not been added for {table_path}.")
+                else:
+                    logger.info(f"Dry-run: Not updating the columns for {table_path}")
+
+
+format_checker = FormatChecker()
+@format_checker.checks("date-time")
+def check_datetime(value):
+    return isinstance(value, str) and int(value[0:4]) >= 1970
 
 
 def clean_and_validate(message, schemas, json_dumps=False):
@@ -136,7 +196,7 @@ def clean_and_validate(message, schemas, json_dumps=False):
         "is_valid": True
     }
     try:
-        validate(message.record, schema)
+        validate(instance=message.record, schema=schema, format_checker=format_checker)
     except ValidationError as e:
         validation["is_valid"] = False
         error_message = str(e)

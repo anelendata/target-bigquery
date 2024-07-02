@@ -13,7 +13,7 @@ from google.cloud.bigquery import Dataset, LoadJobConfig
 from google.cloud.exceptions import NotFound
 from google.api_core import exceptions
 
-from target_bigquery.schema import parse_schema, clean_and_validate
+from target_bigquery.schema import parse_schema, clean_and_validate, modify_schema
 
 logger = singer.get_logger()
 
@@ -279,6 +279,11 @@ def write_records(
             logger.debug(load_job.result())
         except Exception as e:
             logger.critical(load_job.errors)
+            if False:  # For troubleshooting locally
+                table_files[table_name].seek(0)
+                with open(f"./artifacts/{table_name}_with_bad_recrods.json", "w") as f:
+                    for line in table_files[table_name]:
+                        f.write(line)
             raise
 
     for key, value in row_count.items():
@@ -313,10 +318,16 @@ def _emit_state(state):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Config file', required=True)
+    parser.add_argument('-s', '--schema', help='Modify schema catalog file', required=False)
+    parser.add_argument('-d', '--dryrun', type=bool, help='dryrun mode (no write)', default=False, required=False)
+    parser.add_argument('-t', '--tables', help='Comma-separated table names to update schema', default=False, required=False)
     args = parser.parse_args()
 
     with open(args.config) as f:
         config = json.load(f)
+
+    if args.schema:
+        return modify_schema(config, args.schema, streams=args.tables, dryrun=args.dryrun)
 
     on_invalid_record = config.get('on_invalid_record', "abort")
 
