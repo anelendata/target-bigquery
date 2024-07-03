@@ -16,7 +16,7 @@ JSONSCHEMA_TYPES = ["object", "array", "string", "integer", "number", "boolean"]
 logger = singer.get_logger()
 
 
-def _get_schema_type_mode(property_, numeric_type):
+def _get_schema_type_mode(property_, numeric_type, integer_type):
     type_ = property_.get("type")
 
     schema_mode = "NULLABLE"
@@ -36,7 +36,7 @@ def _get_schema_type_mode(property_, numeric_type):
 
     jsonschema_type = jsonschema_type.lower()
     if jsonschema_type not in JSONSCHEMA_TYPES:
-        raise Exception(f"{jsonschema_type} is not a valid jsonschema type")
+        raise Exception(f"{jsonschema_type} is not a valid jsonschema type. property: {property_}")
 
     # map jsonschema to BigQuery type
     if jsonschema_type == "object":
@@ -56,7 +56,7 @@ def _get_schema_type_mode(property_, numeric_type):
                 schema_type = "JSON"
 
     if jsonschema_type == "integer":
-        schema_type = "INT64"
+        schema_type = integer_type
 
     if jsonschema_type == "number":
         schema_type = numeric_type
@@ -67,9 +67,11 @@ def _get_schema_type_mode(property_, numeric_type):
     return schema_type, schema_mode
 
 
-def _parse_property(key, property_, numeric_type="NUMERIC"):
+def _parse_property(key, property_, numeric_type="NUMERIC", integer_type="INTEGER"):
     if numeric_type not in ["NUMERIC", "FLOAT64"]:
         raise ValueError("Unknown numeric type %s" % numeric_type)
+    if integer_type not in ["INTEGER", "INT64"]:
+        raise ValueError("Unknown integer type %s" % integer_type)
 
     schema_name = key
     schema_description = None
@@ -82,16 +84,22 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
             else:
                 property_ = types
 
-    schema_type, schema_mode = _get_schema_type_mode(property_, numeric_type)
-
+    try:
+        schema_type, schema_mode = _get_schema_type_mode(property_, numeric_type, integer_type)
+    except Exception as e:
+        logger.error(f"While parsing {key}")
+        raise
     if schema_type == "RECORD":
         schema_fields = tuple(parse_schema(property_, numeric_type))
 
     if schema_mode == "REPEATED":
         # get child type
-        schema_type, _ = _get_schema_type_mode(property_.get("items"),
-                                               numeric_type)
-
+        try:
+            schema_type, _ = _get_schema_type_mode(property_.get("items"),
+                    numeric_type, integer_type)
+        except Exception as e:
+            logger.error(f"While parsing {key}")
+            raise
         if schema_type == "RECORD":
             schema_fields = tuple(parse_schema(property_.get("items"),
                                                numeric_type))
@@ -108,7 +116,7 @@ def parse_schema(schema, numeric_type="NUMERIC"):
              schema_fields) = _parse_property(key, schema["properties"][key],
                                               numeric_type)
         except Exception as e:
-            logger.error(f"str(e) at {schema['properties'][key]}")
+            logger.error(f"{str(e)} at {schema['properties'][key]}")
             raise e
         schema_field = SchemaField(schema_name, schema_type, schema_mode,
                                    schema_description, schema_fields)
@@ -124,7 +132,7 @@ def parse_schema(schema, numeric_type="NUMERIC"):
     return bq_schema
 
 
-def modify_schema(config, catalog_file, streams=None, numeric_type="NUMERIC", dryrun=False):
+def modify_schema(config, catalog_file, streams=None, integer_type="INTEGER", numeric_type="NUMERIC", dryrun=False):
     with open(catalog_file, "r") as f:
         catalog = json.load(f)
     if isinstance(streams, str):
@@ -133,6 +141,7 @@ def modify_schema(config, catalog_file, streams=None, numeric_type="NUMERIC", dr
 
     for stream in catalog["streams"]:
         if not streams or stream["stream"] in streams:
+            logger.info(f"Checking {stream['stream']}")
             schema = stream["schema"]
             bq_schema = parse_schema(schema)
             table_path = config["project_id"] + "." + config["dataset_id"] + "." + stream["stream"]
@@ -142,24 +151,28 @@ def modify_schema(config, catalog_file, streams=None, numeric_type="NUMERIC", dr
             except:
                 pass
             if not table:
-                logger.error("Table does not exist: " + table_path)
+                logger.warning(f"Table does not exist: {table_path}. target-bigquery will create new table upon sync.")
                 continue
             original_schema = table.schema
             new_schema = original_schema[:]   # Make a copy
-            exist_cols = [sfield.name for sfield in original_schema]
+            original_schema_dict = {}
+            for sfield in original_schema:
+                original_schema_dict[sfield.name] = sfield
             new_cols = 0
             for key in schema["properties"].keys():
-                if key in exist_cols:
-                    logger.warning(f"Column {key} exists in Table {table_path}")
-                    continue
-
-                logger.info(f"Adding Column {key} in Table {table_path}")
                 new_cols += 1
                 (schema_name, schema_type, schema_mode, schema_description,
                  schema_fields) = _parse_property(key, schema["properties"][key],
-                                                  numeric_type)
+                                                  numeric_type, integer_type)
                 schema_field = SchemaField(schema_name, schema_type, schema_mode,
                                            schema_description, schema_fields)
+                original_schema = original_schema_dict.get(key)
+                if original_schema:
+                    if str(original_schema) != str(schema_field):
+                        raise Exception(f"Column {key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}")
+                    continue
+
+                logger.info(f"Adding Column {key} in Table {table_path}")
                 new_schema.append(schema_field)
 
             table.schema = new_schema
@@ -172,12 +185,13 @@ def modify_schema(config, catalog_file, streams=None, numeric_type="NUMERIC", dr
                         logger.error(f"The column has not been added for {table_path}.")
                 else:
                     logger.info(f"Dry-run: Not updating the columns for {table_path}")
-
+            else:
+                logger.info("No schema change detected!")
 
 format_checker = FormatChecker()
 @format_checker.checks("date-time")
 def check_datetime(value):
-    return isinstance(value, str) and int(value[0:4]) >= 1970
+    return value is None or isinstance(value, str) and int(value[0:4]) >= 1970
 
 
 def clean_and_validate(message, schemas, json_dumps=False):

@@ -15,6 +15,13 @@ from google.api_core import exceptions
 
 from target_bigquery.schema import parse_schema, clean_and_validate, modify_schema
 
+LOG_LEVELS = {
+    "DEBUG": logging.DEBUG,
+    "INFO": logging.INFO,
+    "WARNING": logging:WARNING,
+    "ERROR": logging:ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
 logger = singer.get_logger()
 
 
@@ -147,8 +154,12 @@ def write_records(
                 invalid_message = validation["message"]
                 if invalids[message.stream] <= max_warnings:
                     logger.warn(
-                        f"Invalid record found and the process will {on_invalid_record}. "
-                        f"[{instance}] :: {type_} :: {invalid_record_str} :: {message}"
+                        f"Invalid record found and the process will {on_invalid_record}:\n"
+                        f"  [{instance}] :: {type_}"
+                    )
+                    logger.debug(
+                        f"  Record:\n  {json.dumps(message.record)}\n"
+                        f"  Schema:\n  {json.dumps(schemas[message.stream])}"
                     )
                 if invalids[message.stream] == max_warnings:
                     logger.warn(
@@ -321,6 +332,7 @@ def main():
     parser.add_argument('-s', '--schema', help='Modify schema catalog file', required=False)
     parser.add_argument('-d', '--dryrun', type=bool, help='dryrun mode (no write)', default=False, required=False)
     parser.add_argument('-t', '--tables', help='Comma-separated table names to update schema', default=False, required=False)
+    parser.add_argument('-l', '--loglevel', help='Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)', default='INFO')
     args = parser.parse_args()
 
     with open(args.config) as f:
@@ -328,6 +340,12 @@ def main():
 
     if args.schema:
         return modify_schema(config, args.schema, streams=args.tables, dryrun=args.dryrun)
+
+    if args.loglevel:
+        log_level = LOG_LEVELS.get(args.loglevel.upper())
+        if not log_level:
+            raise (f"Log level must be one of {','.join(LOG_LEVELS)}")
+        logger.setLevel(log_level)
 
     on_invalid_record = config.get('on_invalid_record', "abort")
 
