@@ -18,8 +18,8 @@ from target_bigquery.schema import parse_schema, clean_and_validate, modify_sche
 LOG_LEVELS = {
     "DEBUG": logging.DEBUG,
     "INFO": logging.INFO,
-    "WARNING": logging:WARNING,
-    "ERROR": logging:ERROR,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
     "CRITICAL": logging.CRITICAL,
 }
 logger = singer.get_logger()
