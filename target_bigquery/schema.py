@@ -196,14 +196,26 @@ def modify_schema(
             if new_cols > 0:
                 if not dryrun:
                     table = client.update_table(table, ["schema"])  # Make an API request.
-                    if len(table.schema) == len(original_schema) + new_cols == len(new_schema):
-                        logger.info(f"A new column has been added for {table_path}.")
-                    else:
-                        logger.error(f"The column has not been added for {table_path}.")
+                    logger.info(f"New columns have been added for {table_path}.")
                 else:
                     logger.info(f"Dry-run: Not updating the columns for {table_path}")
             else:
                 logger.info("No schema change detected!")
+
+
+def remap_cols(data, mapper):
+    if not mapper:
+        return data
+
+    new_data = dict(data)
+    for key in data.keys():
+        if key not in mapper.keys():
+            continue
+        new_data[mapper[key]] = data[key]
+        new_data.pop(key)
+
+    return new_data
+
 
 format_checker = FormatChecker()
 @format_checker.checks("date-time")
@@ -271,12 +283,5 @@ def clean_and_validate(message, schemas, json_dumps=False, drop_unknown_cols=Fal
         cleaned_record[key] = record[key]
     if unknown_cols:
         validation["warning"] = f"Unknown columns detected: {','.join(unknown_cols)}"
-
-    if json_dumps:
-        try:
-            cleaned_record = bytes(json.dumps(cleaned_record) + "\n", "UTF-8")
-        except TypeError as e:
-            logger.warning(cleaned_record)
-            raise
 
     return cleaned_record, validation
