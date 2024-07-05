@@ -94,6 +94,7 @@ def write_records(
     table_prefix="",
     table_ext="",
     col_mapper={},
+    exclude_unknown_cols=False,
     numeric_type="NUMERIC",
     integer_type="INTEGER",
     load_config_properties=None,
@@ -130,14 +131,15 @@ def write_records(
             raise
 
         if isinstance(message, singer.RecordMessage):
-            json_dumps = not stream
             record, validation = clean_and_validate(
                 message,
                 schemas,
+                exclude_unknown_cols,
             )
             # Map the column to the new name if applicable
             record = remap_cols(record, col_mapper.get(message.stream))
 
+            json_dumps = not stream
             if json_dumps:
                 try:
                     record = bytes(json.dumps(record) + "\n", "UTF-8")
@@ -350,6 +352,7 @@ def sync(config):
                           table_prefix=config.get("table_prefix", ""),
                           table_ext=config.get("table_ext", ""),
                           col_mapper=config.get("column_map", {}),
+                          exclude_unknown_cols=config.get("exclude_unknown_columns", False),
                           numeric_type=numeric_type,
                           integer_type=integer_type,
                           load_config_properties=config.get("load_config"),

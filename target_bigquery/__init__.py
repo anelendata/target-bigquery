@@ -22,7 +22,7 @@ logger = singer.get_logger()
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', help='Config file', required=True)
-    parser.add_argument('-s', '--schema', help='Modify schema catalog file', required=False)
+    parser.add_argument('-s', '--schema', help='Automatically detect and add new BigQuery columns from catalog file', required=False)
     parser.add_argument('-d', '--dryrun', type=bool, help='dryrun mode (no write)', default=False, required=False)
     parser.add_argument('-t', '--tables', help='Comma-separated table names to update schema', default=False, required=False)
     parser.add_argument('-l', '--loglevel', help='Set log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)', default='INFO')

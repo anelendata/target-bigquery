@@ -223,7 +223,7 @@ def check_datetime(value):
     return value is None or isinstance(value, str) and int(value[0:4]) >= 1970
 
 
-def clean_and_validate(message, schemas, json_dumps=False, drop_unknown_cols=False):
+def clean_and_validate(message, schemas, exclude_unknown_cols=False):
     batch_tstamp = datetime.datetime.utcnow()
     batch_tstamp = batch_tstamp.replace(
         tzinfo=datetime.timezone.utc)
@@ -277,7 +277,7 @@ def clean_and_validate(message, schemas, json_dumps=False, drop_unknown_cols=Fal
     cleaned_record = {}
     unknown_cols = []
     for key in record.keys():
-        if drop_unknown_cols and key not in schema["properties"].keys():
+        if exclude_unknown_cols and key not in schema["properties"].keys():
             unknown_cols.append(key)
             continue
         cleaned_record[key] = record[key]

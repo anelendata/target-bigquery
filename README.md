@@ -125,8 +125,18 @@ authenticate to GCP as well:
   table.
 - You can close the tab after the signup flow is complete.
 
+## Schema change considerations
 
-## Mapping column names
+Typically, a change in schema is detected by target_bigquery's schema validation or
+when BigQuery rejects the input. Here are some ideas and options to handle the
+schema changes.
+
+### Mapping column names
+
+It is costly to modify the existing columns in data warehouse.
+One way to handle source data type change is to create a new column.
+(e.g. original column name: price, new: price_)
+And let the downstream (e.g. dbt) reconcile the old and new column types.
 
 In the config, you can use `column_map` to map the source field name to the target column name:
 
@@ -142,15 +152,40 @@ In the config, you can use `column_map` to map the source field name to the targ
       },
       ...
     }
-```
-
-This is useful when you have a data type chage for an existing column.
+``` 
 
 Note: Schema is validated against pre-mapped names. Then the column names are swapped, if applicable, just before being written to BigQuery. So, the input stream (tap) don't have to modify schema message.
 
-(In the downstream process, you can write a view to reconcile and merge the old and new data types. dbt is a good place to do this.)
+### Ignore unknown columns
 
+BigQuery will reject the load if the data contains undefined column.
+This is disruptive to the daily operations which aren't depending on the new columns.
 
+To ignore the unknown columns, add this to config:
+
+```
+{
+    "project_id": "your-gcp-project-id",
+    "dataset_id": "your-bigquery-dataset",
+    ...
+    "exclude_unknown_columns": true,
+    ...
+```
+(Default is false)
+
+Warning logs are written out when new columns are detected.
+
+### Add new columns
+
+Use `--schema` or `-s` followed by the updated catalog file to
+automatically detect and add new column to BigQuery table:
+
+```
+target-bigquery -c files/target_config.json -s files/catalog.json --dryrun -t <table1,table2,...>
+```
+
+- Use `--dryrun` switch to dry run. No change to the BigQuery table. Preview the result in the log.
+- Use `--table` followed by comma separated (no space) table names to execute only for the listed tables.
 
 ## Original repo
 https://github.com/anelendata/target-bigquery
