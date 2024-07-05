@@ -62,7 +62,7 @@ def _get_schema_type_mode(property_, numeric_type, integer_type):
         schema_type = numeric_type
 
     if jsonschema_type == "boolean":
-        schema_type = "BOOL"
+        schema_type = "BOOLEAN"
 
     return schema_type, schema_mode
 
@@ -148,6 +148,7 @@ def modify_schema(
 
     col_map = config.get("column_map", {})
 
+    incompatibles = {}
     for stream in catalog["streams"]:
         if not streams or stream["stream"] in streams:
             logger.info(f"Checking {stream['stream']}")
@@ -170,6 +171,7 @@ def modify_schema(
 
             stream_col_map = col_map.get(stream["stream"], {})
             new_cols = 0
+            incompatible_list = incompatibles.get(stream["stream"], [])
             for key in schema["properties"].keys():
                 mapped_key = stream_col_map.get(key, key)
                 new_cols += 1
@@ -186,11 +188,19 @@ def modify_schema(
                 original_schema = original_schema_dict.get(mapped_key)
                 if original_schema:
                     if str(original_schema) != str(schema_field):
-                        raise Exception(f"Column {mapped_key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}")
+                        incompatible_list.append(
+                            f"  Column {mapped_key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}"
+                        )
                     continue
 
                 logger.info(f"Adding Column {mapped_key} in Table {table_path}")
                 new_schema.append(schema_field)
+
+            if incompatible_list:
+                msg = "Found incompatible types to the existing fields:\n"
+                msg += "\n".join(incompatible_list)
+                logger.error(msg)
+                continue
 
             table.schema = new_schema
             if new_cols > 0:
