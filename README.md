@@ -125,6 +125,33 @@ authenticate to GCP as well:
   table.
 - You can close the tab after the signup flow is complete.
 
+
+## Mapping column names
+
+In the config, you can use `column_map` to map the source field name to the target column name:
+
+```
+{
+    "project_id": "your-gcp-project-id",
+    "dataset_id": "your-bigquery-dataset",
+    ...
+    "column_map": {
+      "<stream_name>": {
+        "<source_field_name>": "<target_col_name>",
+        ...
+      },
+      ...
+    }
+```
+
+This is useful when you have a data type chage for an existing column.
+
+Note: Schema is validated against pre-mapped names. Then the column names are swapped, if applicable, just before being written to BigQuery. So, the input stream (tap) don't have to modify schema message.
+
+(In the downstream process, you can write a view to reconcile and merge the old and new data types. dbt is a good place to do this.)
+
+
+
 ## Original repo
 https://github.com/anelendata/target-bigquery
 

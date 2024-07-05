@@ -90,7 +90,7 @@ def _parse_property(key, property_, numeric_type="NUMERIC", integer_type="INTEGE
         logger.error(f"While parsing {key}")
         raise
     if schema_type == "RECORD":
-        schema_fields = tuple(parse_schema(property_, numeric_type))
+        schema_fields = tuple(parse_schema(property_, numeric_type, integer_type))
 
     if schema_mode == "REPEATED":
         # get child type
@@ -102,19 +102,19 @@ def _parse_property(key, property_, numeric_type="NUMERIC", integer_type="INTEGE
             raise
         if schema_type == "RECORD":
             schema_fields = tuple(parse_schema(property_.get("items"),
-                                               numeric_type))
+                                               numeric_type, integer_type))
 
     return (schema_name, schema_type, schema_mode, schema_description,
             schema_fields)
 
 
-def parse_schema(schema, numeric_type="NUMERIC"):
+def parse_schema(schema, numeric_type="NUMERIC", integer_type="INTEGER"):
     bq_schema = []
     for key in schema.get("properties", {}).keys():
         try:
             (schema_name, schema_type, schema_mode, schema_description,
              schema_fields) = _parse_property(key, schema["properties"][key],
-                                              numeric_type)
+                                              numeric_type, integer_type)
         except Exception as e:
             logger.error(f"{str(e)} at {schema['properties'][key]}")
             raise e
@@ -127,17 +127,26 @@ def parse_schema(schema, numeric_type="NUMERIC"):
                     " Inserting a dummy string object")
         return parse_schema({"properties": {
             "dummy": {"type": ["null", "string"]}}},
-            numeric_type)
+            numeric_type, integer_type)
 
     return bq_schema
 
 
-def modify_schema(config, catalog_file, streams=None, integer_type="INTEGER", numeric_type="NUMERIC", dryrun=False):
+def modify_schema(
+    config,
+    catalog_file,
+    streams=None,
+    numeric_type="NUMERIC",
+    integer_type="INTEGER",
+    dryrun=False,
+    ):
     with open(catalog_file, "r") as f:
         catalog = json.load(f)
     if isinstance(streams, str):
         streams = streams.split(",")
     client = Client(project=config["project_id"])
+
+    col_map = config.get("column_map", {})
 
     for stream in catalog["streams"]:
         if not streams or stream["stream"] in streams:
@@ -158,21 +167,29 @@ def modify_schema(config, catalog_file, streams=None, integer_type="INTEGER", nu
             original_schema_dict = {}
             for sfield in original_schema:
                 original_schema_dict[sfield.name] = sfield
+
+            stream_col_map = col_map.get(stream["stream"], {})
             new_cols = 0
             for key in schema["properties"].keys():
+                mapped_key = stream_col_map.get(key, key)
                 new_cols += 1
+
+                # Note: When parsing, we need to use the original key,
+                # but when instantiating a new schema, we need to use a mapped key as name
                 (schema_name, schema_type, schema_mode, schema_description,
                  schema_fields) = _parse_property(key, schema["properties"][key],
                                                   numeric_type, integer_type)
+                schema_name = mapped_key
                 schema_field = SchemaField(schema_name, schema_type, schema_mode,
                                            schema_description, schema_fields)
-                original_schema = original_schema_dict.get(key)
+
+                original_schema = original_schema_dict.get(mapped_key)
                 if original_schema:
                     if str(original_schema) != str(schema_field):
-                        raise Exception(f"Column {key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}")
+                        raise Exception(f"Column {mapped_key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}")
                     continue
 
-                logger.info(f"Adding Column {key} in Table {table_path}")
+                logger.info(f"Adding Column {mapped_key} in Table {table_path}")
                 new_schema.append(schema_field)
 
             table.schema = new_schema
@@ -194,7 +211,7 @@ def check_datetime(value):
     return value is None or isinstance(value, str) and int(value[0:4]) >= 1970
 
 
-def clean_and_validate(message, schemas, json_dumps=False):
+def clean_and_validate(message, schemas, json_dumps=False, drop_unknown_cols=False):
     batch_tstamp = datetime.datetime.utcnow()
     batch_tstamp = batch_tstamp.replace(
         tzinfo=datetime.timezone.utc)
@@ -234,23 +251,6 @@ def clean_and_validate(message, schemas, json_dumps=False):
             if n is not None:
                 validation["is_valid"] = True
 
-        # TODO:
-        # Convert to BigQuery timestamp type (iso 8601)
-        # if type_ == "string" and format_ == "date-time":
-        #     n = None
-        #     try:
-        #         n = float(message.record[instance])
-        #         d = datetime.datetime.fromtimestamp(n)
-        #         d = d.replace(tzinfo=datetime.timezone.utc)
-        #         message.record[instance] = d.isoformat()
-        #     except Exception:
-        #         # In case we want to persist the rows with partially
-        #         # invalid value
-        #         message.record[instance] = None
-        #         pass
-        #     if d is not None:
-        #         validation["is_valid"] = True
-
         if validation["is_valid"] is False:
             validation["type"] = type_
             validation["instance"] = instance
@@ -261,11 +261,22 @@ def clean_and_validate(message, schemas, json_dumps=False):
         message.record[BATCH_TIMESTAMP] = batch_tstamp.isoformat()
 
     record = message.record
+
+    cleaned_record = {}
+    unknown_cols = []
+    for key in record.keys():
+        if drop_unknown_cols and key not in schema["properties"].keys():
+            unknown_cols.append(key)
+            continue
+        cleaned_record[key] = record[key]
+    if unknown_cols:
+        validation["warning"] = f"Unknown columns detected: {','.join(unknown_cols)}"
+
     if json_dumps:
         try:
-            record = bytes(json.dumps(record) + "\n", "UTF-8")
+            cleaned_record = bytes(json.dumps(cleaned_record) + "\n", "UTF-8")
         except TypeError as e:
-            logger.warning(record)
+            logger.warning(cleaned_record)
             raise
 
-    return record, validation
+    return cleaned_record, validation
