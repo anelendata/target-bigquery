@@ -174,7 +174,6 @@ def modify_schema(
             incompatible_list = incompatibles.get(stream["stream"], [])
             for key in schema["properties"].keys():
                 mapped_key = stream_col_map.get(key, key)
-                new_cols += 1
 
                 # Note: When parsing, we need to use the original key,
                 # but when instantiating a new schema, we need to use a mapped key as name
@@ -193,6 +192,7 @@ def modify_schema(
                         )
                     continue
 
+                new_cols += 1
                 logger.info(f"Adding Column {mapped_key} in Table {table_path}")
                 new_schema.append(schema_field)
 
