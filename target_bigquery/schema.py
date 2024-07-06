@@ -196,6 +196,10 @@ def modify_schema(
                 logger.info(f"Adding Column {mapped_key} in Table {table_path}")
                 new_schema.append(schema_field)
 
+            for key in original_schema_dict.keys():
+                if key not in schema["properties"].keys():
+                    logger.warning(f"{key} not in the new schema any more!")
+
             if incompatible_list:
                 msg = "Found incompatible types to the existing fields:\n"
                 msg += "\n".join(incompatible_list)
