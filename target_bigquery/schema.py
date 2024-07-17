@@ -148,13 +148,16 @@ def modify_schema(
 
     col_map = config.get("column_map", {})
 
+    table_prefix=config.get("table_prefix", "")
+    table_ext=config.get("table_ext", "")
+
     incompatibles = {}
     for stream in catalog["streams"]:
         if not streams or stream["stream"] in streams:
             logger.info(f"Checking {stream['stream']}")
             schema = stream["schema"]
             bq_schema = parse_schema(schema)
-            table_path = config["project_id"] + "." + config["dataset_id"] + "." + stream["stream"]
+            table_path = config["project_id"] + "." + config["dataset_id"] + "." + table_prefix + stream["stream"] + table_ext
             table = None
             try:
                 table = client.get_table(table_path)
@@ -288,14 +291,23 @@ def clean_and_validate(message, schemas, exclude_unknown_cols=False):
 
     record = message.record
 
+    # Before returning output, check for unknown columns
     cleaned_record = {}
     unknown_cols = []
     for key in record.keys():
-        if exclude_unknown_cols and key not in schema["properties"].keys():
+        if key not in schema["properties"].keys():
             unknown_cols.append(key)
             continue
         cleaned_record[key] = record[key]
     if unknown_cols:
-        validation["warning"] = f"Unknown columns detected: {','.join(unknown_cols)}"
+        msg = f"Unknown columns detected: {','.join(unknown_cols)}"
+        if exclude_unknown_cols:
+            validation["warning"] = msg
+        elif validation["is_valid"]:
+            validation["is_valid"] = False
+            validation["type"] = ""
+            validation["instance"] = ""
+            validation["record"] = message.record
+            validation["message"] = msg
 
     return cleaned_record, validation

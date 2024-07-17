@@ -148,6 +148,8 @@ def write_records(
                     raise
 
             if validation.get("warning"):
+                if not warnings.get(message.stream):
+                    warnings[message.stream] = 0
                 warnings[message.stream] += 1
                 if warnings[message.stream] <= max_warnings:
                     logger.warning(validation["warning"])
@@ -161,7 +163,8 @@ def write_records(
                 if invalids[message.stream] <= max_warnings:
                     logger.warn(
                         f"Invalid record found and the process will {on_invalid_record}:\n"
-                        f"  [{instance}] :: {type_}"
+                        f"  {invalid_message}\n"
+                        f"  [{instance}] :: {type_}\n"
                     )
                     logger.debug(
                         f"  Record:\n  {json.dumps(message.record)}\n"
