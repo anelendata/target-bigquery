@@ -19,6 +19,8 @@ logger = singer.get_logger()
 def _get_schema_type_mode(property_, numeric_type, integer_type):
     type_ = property_.get("type")
 
+    jsonschema_type = "null"
+    schema_type = "NULL"
     schema_mode = "NULLABLE"
     if isinstance(type_, list):
         if type_[0] != "null":
@@ -139,6 +141,7 @@ def modify_schema(
     numeric_type="NUMERIC",
     integer_type="INTEGER",
     dryrun=False,
+    continue_on_incompatible=False,
     ):
     with open(catalog_file, "r") as f:
         catalog = json.load(f)
@@ -191,7 +194,7 @@ def modify_schema(
                 if original_schema:
                     if str(original_schema) != str(schema_field):
                         incompatible_list.append(
-                            f"  Column {mapped_key}: original and new have different schema. {str(original_schema)} vs {str(schema_field)}"
+                            f"  Column {mapped_key}: original and new have different schema.\nOrginal:\n   {str(original_schema)}\n...vs New:\n   {str(schema_field)}"
                         )
                     continue
 
@@ -204,10 +207,16 @@ def modify_schema(
                     logger.warning(f"{key} not in the new schema any more!")
 
             if incompatible_list:
-                msg = "Found incompatible types to the existing fields:\n"
+                msg = "Found incompatible types to the existing fields \n"
+                if continue_on_incompatible:
+                    msg += "...this change will be ignored with no change in '--continue-on-incompatible' mode.\n"
                 msg += "\n".join(incompatible_list)
-                logger.error(msg)
-                continue
+
+                if continue_on_incompatible:
+                    logger.warning(msg)
+                else:
+                    logger.error(msg)
+                    continue
 
             table.schema = new_schema
             if new_cols > 0:
