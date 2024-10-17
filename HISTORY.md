@@ -1,5 +1,9 @@
 ## History
 
+### 0.2.2 (2024-10-16)
+
+- New feature: Schema udpate check and add columns (See README.md)
+
 ### 0.2.1 (2023-10-20)
 
 - Support JSON type #11

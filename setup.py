@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from setuptools import setup
 
-VERSION = "0.2.1"
+VERSION = "0.2.2"
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
@@ -22,17 +22,18 @@ setup(
         "Operating System :: MacOS :: MacOS X",
         "Operating System :: POSIX :: Linux",
 
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
-        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
 
-    install_requires=["singer-python>=5.2.0",
-                      "google-api-python-client>=1.6.2",
-                      "google-cloud-bigquery==2.34.2",
-                      "simplejson==3.11.1",
-                      "setuptools>=40.3.0"
-                      ],
+    install_requires=[
+        "singer-python>=6.1.0",
+        "google-api-python-client>=2.146.2",
+        "google-cloud-bigquery==2.34.4",
+        "simplejson>=3.19.3",
+        "setuptools==59.6.0"
+    ],
 
     entry_points="""
     [console_scripts]
