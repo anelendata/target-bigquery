@@ -2,8 +2,8 @@ import datetime
 import simplejson as json
 import re
 
-from google.cloud.bigquery import SchemaField
-from jsonschema import validate
+from google.cloud.bigquery import Client, SchemaField
+from jsonschema import validate, FormatChecker
 from jsonschema.exceptions import ValidationError
 import singer
 
@@ -16,9 +16,11 @@ JSONSCHEMA_TYPES = ["object", "array", "string", "integer", "number", "boolean"]
 logger = singer.get_logger()
 
 
-def _get_schema_type_mode(property_, numeric_type):
+def _get_schema_type_mode(property_, numeric_type, integer_type):
     type_ = property_.get("type")
 
+    jsonschema_type = "null"
+    schema_type = "NULL"
     schema_mode = "NULLABLE"
     if isinstance(type_, list):
         if type_[0] != "null":
@@ -36,7 +38,7 @@ def _get_schema_type_mode(property_, numeric_type):
 
     jsonschema_type = jsonschema_type.lower()
     if jsonschema_type not in JSONSCHEMA_TYPES:
-        raise Exception(f"{jsonschema_type} is not a valid jsonschema type")
+        raise Exception(f"{jsonschema_type} is not a valid jsonschema type. property: {property_}")
 
     # map jsonschema to BigQuery type
     if jsonschema_type == "object":
@@ -56,20 +58,22 @@ def _get_schema_type_mode(property_, numeric_type):
                 schema_type = "JSON"
 
     if jsonschema_type == "integer":
-        schema_type = "INT64"
+        schema_type = integer_type
 
     if jsonschema_type == "number":
         schema_type = numeric_type
 
     if jsonschema_type == "boolean":
-        schema_type = "BOOL"
+        schema_type = "BOOLEAN"
 
     return schema_type, schema_mode
 
 
-def _parse_property(key, property_, numeric_type="NUMERIC"):
+def _parse_property(key, property_, numeric_type="NUMERIC", integer_type="INTEGER"):
     if numeric_type not in ["NUMERIC", "FLOAT64"]:
         raise ValueError("Unknown numeric type %s" % numeric_type)
+    if integer_type not in ["INTEGER", "INT64"]:
+        raise ValueError("Unknown integer type %s" % integer_type)
 
     schema_name = key
     schema_description = None
@@ -82,30 +86,40 @@ def _parse_property(key, property_, numeric_type="NUMERIC"):
             else:
                 property_ = types
 
-    schema_type, schema_mode = _get_schema_type_mode(property_, numeric_type)
-
+    try:
+        schema_type, schema_mode = _get_schema_type_mode(property_, numeric_type, integer_type)
+    except Exception as e:
+        logger.error(f"While parsing {key}")
+        raise
     if schema_type == "RECORD":
-        schema_fields = tuple(parse_schema(property_, numeric_type))
+        schema_fields = tuple(parse_schema(property_, numeric_type, integer_type))
 
     if schema_mode == "REPEATED":
         # get child type
-        schema_type, _ = _get_schema_type_mode(property_.get("items"),
-                                               numeric_type)
-
+        try:
+            schema_type, _ = _get_schema_type_mode(property_.get("items"),
+                    numeric_type, integer_type)
+        except Exception as e:
+            logger.error(f"While parsing {key}")
+            raise
         if schema_type == "RECORD":
             schema_fields = tuple(parse_schema(property_.get("items"),
-                                               numeric_type))
+                                               numeric_type, integer_type))
 
     return (schema_name, schema_type, schema_mode, schema_description,
             schema_fields)
 
 
-def parse_schema(schema, numeric_type="NUMERIC"):
+def parse_schema(schema, numeric_type="NUMERIC", integer_type="INTEGER"):
     bq_schema = []
     for key in schema.get("properties", {}).keys():
-        (schema_name, schema_type, schema_mode, schema_description,
-         schema_fields) = _parse_property(key, schema["properties"][key],
-                                          numeric_type)
+        try:
+            (schema_name, schema_type, schema_mode, schema_description,
+             schema_fields) = _parse_property(key, schema["properties"][key],
+                                              numeric_type, integer_type)
+        except Exception as e:
+            logger.error(f"{str(e)} at {schema['properties'][key]}")
+            raise e
         schema_field = SchemaField(schema_name, schema_type, schema_mode,
                                    schema_description, schema_fields)
         bq_schema.append(schema_field)
@@ -115,12 +129,127 @@ def parse_schema(schema, numeric_type="NUMERIC"):
                     " Inserting a dummy string object")
         return parse_schema({"properties": {
             "dummy": {"type": ["null", "string"]}}},
-            numeric_type)
+            numeric_type, integer_type)
 
     return bq_schema
 
 
-def clean_and_validate(message, schemas, json_dumps=False):
+def modify_schema(
+    config,
+    catalog_file,
+    streams=None,
+    numeric_type="NUMERIC",
+    integer_type="INTEGER",
+    dryrun=False,
+    continue_on_incompatible=False,
+    ):
+    with open(catalog_file, "r") as f:
+        catalog = json.load(f)
+    if isinstance(streams, str):
+        streams = streams.split(",")
+    client = Client(project=config["project_id"])
+
+    col_map = config.get("column_map", {})
+
+    table_prefix=config.get("table_prefix", "")
+    table_ext=config.get("table_ext", "")
+
+    incompatibles = {}
+    for stream in catalog["streams"]:
+        if not streams or stream["stream"] in streams:
+            logger.info(f"Checking {stream['stream']}")
+            schema = stream["schema"]
+            bq_schema = parse_schema(schema)
+            table_path = config["project_id"] + "." + config["dataset_id"] + "." + table_prefix + stream["stream"] + table_ext
+            table = None
+            try:
+                table = client.get_table(table_path)
+            except:
+                pass
+            if not table:
+                logger.warning(f"Table does not exist: {table_path}. target-bigquery will create new table upon sync.")
+                continue
+            original_schema = table.schema
+            new_schema = original_schema[:]   # Make a copy
+            original_schema_dict = {}
+            for sfield in original_schema:
+                original_schema_dict[sfield.name] = sfield
+
+            stream_col_map = col_map.get(stream["stream"], {})
+            new_cols = 0
+            incompatible_list = incompatibles.get(stream["stream"], [])
+            for key in schema["properties"].keys():
+                mapped_key = stream_col_map.get(key, key)
+
+                # Note: When parsing, we need to use the original key,
+                # but when instantiating a new schema, we need to use a mapped key as name
+                (schema_name, schema_type, schema_mode, schema_description,
+                 schema_fields) = _parse_property(key, schema["properties"][key],
+                                                  numeric_type, integer_type)
+                schema_name = mapped_key
+                schema_field = SchemaField(schema_name, schema_type, schema_mode,
+                                           schema_description, schema_fields)
+
+                original_schema = original_schema_dict.get(mapped_key)
+                if original_schema:
+                    if str(original_schema) != str(schema_field):
+                        incompatible_list.append(
+                            f"  Column {mapped_key}: original and new have different schema.\nOrginal:\n   {str(original_schema)}\n...vs New:\n   {str(schema_field)}"
+                        )
+                    continue
+
+                new_cols += 1
+                logger.info(f"Adding Column {mapped_key} in Table {table_path}")
+                new_schema.append(schema_field)
+
+            for key in original_schema_dict.keys():
+                if key not in schema["properties"].keys():
+                    logger.warning(f"{key} not in the new schema any more!")
+
+            if incompatible_list:
+                msg = "Found incompatible types to the existing fields \n"
+                if continue_on_incompatible:
+                    msg += "...this change will be ignored with no change in '--continue-on-incompatible' mode.\n"
+                msg += "\n".join(incompatible_list)
+
+                if continue_on_incompatible:
+                    logger.warning(msg)
+                else:
+                    logger.error(msg)
+                    continue
+
+            table.schema = new_schema
+            if new_cols > 0:
+                if not dryrun:
+                    table = client.update_table(table, ["schema"])  # Make an API request.
+                    logger.info(f"New columns have been added for {table_path}.")
+                else:
+                    logger.info(f"Dry-run: Not updating the columns for {table_path}")
+            else:
+                logger.info("No schema change detected!")
+
+
+def remap_cols(data, mapper):
+    if not mapper:
+        return data
+
+    new_data = dict(data)
+    for key in data.keys():
+        if key not in mapper.keys():
+            continue
+        new_data[mapper[key]] = data[key]
+        new_data.pop(key)
+
+    return new_data
+
+
+format_checker = FormatChecker()
+@format_checker.checks("date-time")
+def check_datetime(value):
+    return value is None or isinstance(value, str) and int(value[0:4]) >= 1970
+
+
+def clean_and_validate(message, schemas, exclude_unknown_cols=False):
     batch_tstamp = datetime.datetime.utcnow()
     batch_tstamp = batch_tstamp.replace(
         tzinfo=datetime.timezone.utc)
@@ -136,7 +265,7 @@ def clean_and_validate(message, schemas, json_dumps=False):
         "is_valid": True
     }
     try:
-        validate(message.record, schema)
+        validate(instance=message.record, schema=schema, format_checker=format_checker)
     except ValidationError as e:
         validation["is_valid"] = False
         error_message = str(e)
@@ -160,23 +289,6 @@ def clean_and_validate(message, schemas, json_dumps=False):
             if n is not None:
                 validation["is_valid"] = True
 
-        # TODO:
-        # Convert to BigQuery timestamp type (iso 8601)
-        # if type_ == "string" and format_ == "date-time":
-        #     n = None
-        #     try:
-        #         n = float(message.record[instance])
-        #         d = datetime.datetime.fromtimestamp(n)
-        #         d = d.replace(tzinfo=datetime.timezone.utc)
-        #         message.record[instance] = d.isoformat()
-        #     except Exception:
-        #         # In case we want to persist the rows with partially
-        #         # invalid value
-        #         message.record[instance] = None
-        #         pass
-        #     if d is not None:
-        #         validation["is_valid"] = True
-
         if validation["is_valid"] is False:
             validation["type"] = type_
             validation["instance"] = instance
@@ -187,11 +299,24 @@ def clean_and_validate(message, schemas, json_dumps=False):
         message.record[BATCH_TIMESTAMP] = batch_tstamp.isoformat()
 
     record = message.record
-    if json_dumps:
-        try:
-            record = bytes(json.dumps(record) + "\n", "UTF-8")
-        except TypeError as e:
-            logger.warning(record)
-            raise
 
-    return record, validation
+    # Before returning output, check for unknown columns
+    cleaned_record = {}
+    unknown_cols = []
+    for key in record.keys():
+        if key not in schema["properties"].keys():
+            unknown_cols.append(key)
+            continue
+        cleaned_record[key] = record[key]
+    if unknown_cols:
+        msg = f"Unknown columns detected: {','.join(unknown_cols)}"
+        if exclude_unknown_cols:
+            validation["warning"] = msg
+        elif validation["is_valid"]:
+            validation["is_valid"] = False
+            validation["type"] = ""
+            validation["instance"] = ""
+            validation["record"] = message.record
+            validation["message"] = msg
+
+    return cleaned_record, validation
