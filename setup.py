@@ -28,11 +28,10 @@ setup(
     ],
 
     install_requires=[
-        "singer-python>=6.1.0",
-        "google-api-python-client>=2.146.2",
-        "google-cloud-bigquery==2.34.4",
-        "simplejson>=3.19.3",
-        "setuptools==59.6.0"
+        "singer-python==6.0.0",
+        "google-api-python-client==2.133.0",
+        "google-cloud-bigquery==2.34.2",
+        "simplejson==3.11.1",
     ],
 
     entry_points="""
