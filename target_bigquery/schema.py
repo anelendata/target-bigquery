@@ -120,8 +120,13 @@ def parse_schema(schema, numeric_type="NUMERIC", integer_type="INTEGER"):
         except Exception as e:
             logger.error(f"{str(e)} at {schema['properties'][key]}")
             raise e
-        schema_field = SchemaField(schema_name, schema_type, schema_mode,
-                                   schema_description, schema_fields)
+        schema_field = SchemaField(
+            name=schema_name,
+            field_type=schema_type,
+            mode=schema_mode,
+            description=schema_description,
+            fields=schema_fields,
+        )
         bq_schema.append(schema_field)
 
     if not bq_schema:

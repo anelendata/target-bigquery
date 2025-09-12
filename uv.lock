@@ -275,22 +275,20 @@ wheels = [
 
 [[package]]
 name = "google-cloud-bigquery"
-version = "2.34.2"
+version = "3.37.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
     { name = "google-cloud-core" },
     { name = "google-resumable-media" },
-    { name = "grpcio" },
     { name = "packaging" },
-    { name = "proto-plus" },
-    { name = "protobuf" },
     { name = "python-dateutil" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/b4/ce/1e64a231508d30b3bf4e1fb58dbf9ea4c7eef914ebad74acd9f7bae6314a/google-cloud-bigquery-2.34.2.tar.gz", hash = "sha256:0eb882df30a00f5a1ef3d339a23a670230800b2ab249459591a7e685aad6714f", size = 379304, upload-time = "2022-03-07T14:51:10.961Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5e/01/3e1b7858817ba8f9555ae10f5269719f5d1d6e0a384ea0105c0228c0ce22/google_cloud_bigquery-3.37.0.tar.gz", hash = "sha256:4f8fe63f5b8d43abc99ce60b660d3ef3f63f22aabf69f4fe24a1b450ef82ed97", size = 502826, upload-time = "2025-09-09T17:24:16.652Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/0a/19/5da02ea4af4113627aef206f53d4c4454306ce05247b1377d15c3d78d158/google_cloud_bigquery-2.34.2-py2.py3-none-any.whl", hash = "sha256:bd7de9e3126ea0975d1f5b25e69c28b644c69821c229327e64b38e44fb16497e", size = 206147, upload-time = "2022-03-07T14:51:08.832Z" },
+    { url = "https://files.pythonhosted.org/packages/47/90/f0f7db64ee5b96e30434b45ead3452565d0f65f6c0d85ec9ef6e059fb748/google_cloud_bigquery-3.37.0-py3-none-any.whl", hash = "sha256:f006611bcc83b3c071964a723953e918b699e574eb8614ba564ae3cdef148ee1", size = 258889, upload-time = "2025-09-09T17:24:15.249Z" },
 ]
 
 [[package]]
@@ -702,8 +700,8 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "google-api-python-client", specifier = "==2.133.0" },
-    { name = "google-cloud-bigquery", specifier = "==2.34.2" },
+    { name = "google-api-python-client", specifier = ">=2.133.0" },
+    { name = "google-cloud-bigquery", specifier = "==3.37.0" },
     { name = "simplejson", specifier = "==3.13.2" },
     { name = "singer-python", specifier = "==6.1.1" },
 ]

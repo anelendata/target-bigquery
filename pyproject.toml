@@ -26,8 +26,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "google-api-python-client==2.133.0",
-    "google-cloud-bigquery==2.34.2",
+    "google-api-python-client>=2.133.0",
+    "google-cloud-bigquery==3.37.0",
     "simplejson==3.13.2",
     "singer-python==6.1.1",
 ]
@@ -36,7 +36,7 @@ dependencies = [
 Homepage = "https://github.com/anelendata/target-bigquery"
 
 [project.scripts]
-target-bigquery = "target_bigquery:main"
+target-bigquery = "target_bigquery:main.main"
 
 
 [tool.setuptools.packages.find]
