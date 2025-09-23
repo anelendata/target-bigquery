@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "target-bigquery-partition"
+version = "0.2.4"
+description = "Google BigQuery target of singer.io framework."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+
+authors = [
+  { name = "Daigo Tanaka" }
+]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12"
+]
+
+dependencies = [
+    "google-api-python-client>=2.133.0",
+    "google-cloud-bigquery==3.37.0",
+    "simplejson==3.13.2",
+    "singer-python==6.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/anelendata/target-bigquery"
+
+[project.scripts]
+target-bigquery = "target_bigquery:main.main"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["target_bigquery*"]
+
+[tool.setuptools]
+include-package-data = true
+
+[dependency-groups]
+dev = [
+    "build>=1.3.0",
+    "pytest",
+]
