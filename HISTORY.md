@@ -1,5 +1,10 @@
 ## History
 
+### 0.2.4 (2025-09-22)
+
+- Update the signature of the SchemaField instantiation with the google-bigquery 3.37 API.
+- Modernize the package
+
 ### 0.2.3 (2024-10-16)
 
 Fix dependencies.

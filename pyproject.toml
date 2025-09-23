@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "target-bigquery-partition"
-version = "0.2.3"
+version = "0.2.4"
 description = "Google BigQuery target of singer.io framework."
 readme = "README.md"
 requires-python = ">=3.9"
