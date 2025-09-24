@@ -192,8 +192,13 @@ def modify_schema(
                  schema_fields) = _parse_property(key, schema["properties"][key],
                                                   numeric_type, integer_type)
                 schema_name = mapped_key
-                schema_field = SchemaField(schema_name, schema_type, schema_mode,
-                                           schema_description, schema_fields)
+                schema_field = SchemaField(
+                    name=schema_name,
+                    field_type=schema_type,
+                    mode=schema_mode,
+                    description=schema_description,
+                    fields=schema_fields,
+                )
 
                 original_schema = original_schema_dict.get(mapped_key)
                 if original_schema:
