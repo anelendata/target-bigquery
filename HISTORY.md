@@ -1,5 +1,8 @@
 ## History
 
+### 0.2.5 (2025-10-27)
+- fix: SchemaField signature update during the schema update
+
 ### 0.2.4 (2025-09-22)
 
 - Update the signature of the SchemaField instantiation with the google-bigquery 3.37 API.
